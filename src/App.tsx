@@ -24,6 +24,8 @@ import {
 } from './api/client';
 import type { ChatMessage, Conversation, DocumentItem } from './types';
 
+
+
 const LOGO_SRC = '/logo.png';
 
 const SUGGESTIONS = [
@@ -35,6 +37,8 @@ const SUGGESTIONS = [
 
 type SidebarTab = 'chats' | 'documents';
 type ChatFilter = 'all' | 'archived';
+
+
 
 export default function App() {
   const [tab, setTab] = useState<SidebarTab>('chats');
@@ -63,6 +67,8 @@ export default function App() {
   const threadRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  const [lastPresentationMsg, setLastPresentationMsg] = useState<ChatMessage | null>(null);
+  
 
   const activeConversation = conversations.find((c) => c._id === activeConversationId);
   const activeTitle = activeConversation?.title ?? 'New conversation';
@@ -179,11 +185,14 @@ export default function App() {
 
     abortRef.current = new AbortController();
 
+    let finalContent = '';
+    const isPresentationModification = lastPresentationMsg && message.toLowerCase().includes('slide');
+
     try {
       let convId = conversationId ?? undefined;
 
       await streamChat({
-        message,
+        message: finalMessage,
         conversationId: convId,
         documentIds: attachedDocs.map((d) => d._id),
         model: selectedModel || undefined,
@@ -199,6 +208,7 @@ export default function App() {
           }
         },
         onChunk: (chunk) => {
+          finalContent += chunk;
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m))
           );
@@ -372,13 +382,19 @@ export default function App() {
         link.click();
         URL.revokeObjectURL(url);
       } else {
-        const { blob, filename } = await downloadPresentation(doc._id);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
+        // Generate presentation and show in chat
+        const res = await fetchPresentation(doc._id);
+        const newMessage: ChatMessage = {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          content: res.data!.text,
+          downloadable: {
+            text: res.data!.text,
+            filename: res.data!.filename,
+          },
+        };
+        setMessages((prev) => [...prev, newMessage]);
+        setLastPresentationMsg(newMessage);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Action failed');
@@ -570,6 +586,16 @@ export default function App() {
                 <span className="list-item-meta">
                   {(doc.wordCount ?? 0).toLocaleString()} words
                   {doc.pageCount ? ` · ${doc.pageCount} pages` : ''}
+                  {' · '}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleDeleteDocument(doc._id)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleDeleteDocument(doc._id)}
+                    style={{ color: '#f87171', cursor: 'pointer' }}
+                  >
+                    Delete
+                  </span>
                 </span>
                 <div className="doc-actions">
                   <button type="button" className="btn btn-ghost" onClick={() => handleDocAction(doc, 'attach')}>
@@ -724,4 +750,7 @@ export default function App() {
       </main>
     </div>
   );
+  
 }
+
+

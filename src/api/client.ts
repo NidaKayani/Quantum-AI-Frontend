@@ -1,8 +1,11 @@
+import type { ApiResponse } from '../types';
+
 const USER_ID_KEY = 'quantum-ai-user-id';
 const TOKEN_KEY = 'quantum-ai-token';
 const QUANTUM_CHAT_TOKEN_KEY = 'qc_token';
 
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
+
 
 export function getUserId(): string {
   let id = localStorage.getItem(USER_ID_KEY);

@@ -149,6 +149,38 @@ export function MessageBubble({
             )}
           </div>
         )}
+        {message.downloadable && (
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <button
+              onClick={() => onDownload?.(message)}
+              style={{
+                padding: '6px 12px',
+                background: '#2563EB',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              ⬇ Download
+            </button>
+            <button
+              onClick={() => onEdit?.(message)}
+              style={{
+                padding: '6px 12px',
+                background: '#7c3aed',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              ✏️ Request Changes
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

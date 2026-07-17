@@ -12,10 +12,22 @@ export interface ChatMessage {
   role: MessageRole;
   content: string;
   createdAt?: string;
-  downloadable?: {
-    text: string;
-    filename: string;
-  };
+  searchResults?: SearchResultsPayload;
+}
+
+export type SearchSource = 'google' | 'youtube' | 'reddit';
+
+export interface SearchHit {
+  source: SearchSource;
+  title: string;
+  url: string;
+  snippet: string;
+  meta?: string;
+}
+
+export interface SearchResultsPayload {
+  query: string;
+  results: SearchHit[];
 }
 
 export interface Conversation {

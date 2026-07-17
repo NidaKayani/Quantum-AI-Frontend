@@ -46,3 +46,7 @@ export async function askDocument(id: string, question: string) {
   });
   return res.data!;
 }
+
+export async function deleteDocument(id: string) {
+  await apiDelete(`/documents/${id}`);
+}

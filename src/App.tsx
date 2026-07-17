@@ -3,12 +3,16 @@ import { MessageBubble } from './components/MessageBubble';
 import { ChatInput } from './components/ChatInput';
 import {
   deleteConversation,
+  deleteDocument,
   fetchConversation,
   fetchConversations,
   fetchDocuments,
 } from './api/conversations';
-import { streamChat, uploadDocuments, downloadPresentation } from './api/client';
+// import { streamChat, uploadDocuments, downloadPresentation } from './api/client';
+import { streamChat, uploadDocuments, fetchPresentation, downloadFile } from './api/client';
 import type { ChatMessage, Conversation, DocumentItem } from './types';
+
+
 
 const LOGO_SRC = '/logo.png';
 
@@ -20,6 +24,8 @@ const SUGGESTIONS = [
 ];
 
 type SidebarTab = 'chats' | 'documents';
+
+
 
 export default function App() {
   const [tab, setTab] = useState<SidebarTab>('chats');
@@ -35,6 +41,8 @@ export default function App() {
   const threadRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  const [lastPresentationMsg, setLastPresentationMsg] = useState<ChatMessage | null>(null);
+  
 
   const activeTitle =
     conversations.find((c) => c._id === activeConversationId)?.title ?? 'New conversation';
@@ -120,11 +128,20 @@ export default function App() {
 
     abortRef.current = new AbortController();
 
+    let finalContent = '';
+    const isPresentationModification = lastPresentationMsg && message.toLowerCase().includes('slide');
+
     try {
       let convId = activeConversationId ?? undefined;
+      
+      let finalMessage = message;
+      
+      if (isPresentationModification && lastPresentationMsg?.downloadable) {
+        finalMessage = `${message}\n\nReturn the modified presentation in this exact format with slides labeled as "--- SLIDE X: TITLE ---" and maintain the structure with Title, Content (as bullet points), and Notes sections.`;
+      }
 
       await streamChat({
-        message,
+        message: finalMessage,
         conversationId: convId,
         documentIds: attachedDocs.map((d) => d._id),
         signal: abortRef.current.signal,
@@ -133,12 +150,50 @@ export default function App() {
           if (!activeConversationId) setActiveConversationId(id);
         },
         onChunk: (chunk) => {
+          finalContent += chunk;
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m))
           );
         },
         onError: (msg) => setError(msg),
       });
+
+      // Check if the final content is a presentation or summary that should be downloadable
+      const isPresentation = finalContent.includes('--- SLIDE');
+      const isSummary = message.toLowerCase().includes('summary') || message.toLowerCase().includes('summarize');
+
+      if ((isPresentation || isSummary) && finalContent.trim().length > 0) {
+        const filename = isPresentation 
+          ? (lastPresentationMsg?.downloadable?.filename || 'presentation.txt')
+          : `${messages[messages.length - 1]?.content.split(' ')[0] || 'document'}-summary.txt`;
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  downloadable: {
+                    text: finalContent,
+                    filename,
+                  },
+                }
+              : m
+          )
+        );
+
+        // Update the last presentation message if it's a presentation
+        if (isPresentation) {
+          setLastPresentationMsg({
+            id: assistantId,
+            role: 'assistant',
+            content: finalContent,
+            downloadable: {
+              text: finalContent,
+              filename,
+            },
+          });
+        }
+      }
 
       await loadConversations();
     } catch (e) {
@@ -172,6 +227,18 @@ export default function App() {
     await loadConversations();
   };
 
+  const handleDeleteDocument = async (id: string) => {
+    try {
+      await deleteDocument(id);
+      // Remove from attached docs if present
+      setAttachedDocs((prev) => prev.filter((d) => d._id !== id));
+      // Reload documents list
+      await loadDocuments();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete document');
+    }
+  };
+
   const handleDocAction = async (doc: DocumentItem, action: 'summarize' | 'ppt' | 'attach') => {
     if (action === 'attach') {
       setAttachedDocs((prev) => (prev.some((d) => d._id === doc._id) ? prev : [...prev, doc]));
@@ -182,15 +249,22 @@ export default function App() {
     try {
       if (action === 'summarize') {
         setAttachedDocs([doc]);
+        setLastPresentationMsg(null); // ← Reset presentation context
         await handleSend(`Please provide a comprehensive summary of "${doc.originalName}".`);
       } else {
-        const { blob, filename } = await downloadPresentation(doc._id);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
+        // Generate presentation and show in chat
+        const res = await fetchPresentation(doc._id);
+        const newMessage: ChatMessage = {
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          content: res.data!.text,
+          downloadable: {
+            text: res.data!.text,
+            filename: res.data!.filename,
+          },
+        };
+        setMessages((prev) => [...prev, newMessage]);
+        setLastPresentationMsg(newMessage);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Action failed');
@@ -198,6 +272,28 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  const handleDownloadMessage = useCallback((msg: ChatMessage) => {
+    if (msg.downloadable) {
+      downloadFile(msg.downloadable.text, msg.downloadable.filename);
+    }
+  }, []);
+
+  const handleEditPresentation = useCallback((msg: ChatMessage) => {
+    if (msg.downloadable) {
+      // Store the presentation for context
+      setLastPresentationMsg(msg);
+      // Add system instruction to the input
+      const instruction = `Here is the current presentation structure:\n\n${msg.downloadable.text}\n\nPlease modify it as follows: `;
+      setInput(instruction);
+      // Scroll to input
+      setTimeout(() => {
+        const input = document.querySelector('textarea') as HTMLTextAreaElement | null;
+        input?.focus();
+        input?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 0);
+    }
+  }, []);
 
   return (
     <div className="app-shell">
@@ -278,6 +374,16 @@ export default function App() {
                 <span className="list-item-meta">
                   {(doc.wordCount ?? 0).toLocaleString()} words
                   {doc.pageCount ? ` · ${doc.pageCount} pages` : ''}
+                  {' · '}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleDeleteDocument(doc._id)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleDeleteDocument(doc._id)}
+                    style={{ color: '#f87171', cursor: 'pointer' }}
+                  >
+                    Delete
+                  </span>
                 </span>
                 <div className="doc-actions">
                   <button type="button" className="btn btn-ghost" onClick={() => handleDocAction(doc, 'attach')}>
@@ -335,7 +441,8 @@ export default function App() {
               </div>
             </div>
           ) : (
-            messages.map((m) => <MessageBubble key={m.id} message={m} />)
+
+            messages.map((m) => <MessageBubble key={m.id} message={m} onDownload={handleDownloadMessage} onEdit={handleEditPresentation} />)
           )}
         </div>
 
@@ -351,4 +458,7 @@ export default function App() {
       </main>
     </div>
   );
+  
 }
+
+

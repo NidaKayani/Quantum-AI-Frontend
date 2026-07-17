@@ -1,7 +1,10 @@
+import type { ApiResponse } from '../types';
+
 const USER_ID_KEY = 'quantum-ai-user-id';
 const TOKEN_KEY = 'quantum-ai-token';
 
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
+
 
 export function getUserId(): string {
   let id = localStorage.getItem(USER_ID_KEY);
@@ -188,3 +191,26 @@ export async function downloadPresentation(
   const filename = match?.[1] ?? 'presentation.pptx';
   return { blob, filename };
 }
+
+// Fetch presentation content (shows in chat)
+export async function fetchPresentation(
+  id: string,
+  body?: { subject?: string; gradeLevel?: string }
+) {
+  return apiPost<ApiResponse<{ text: string; plan: any; filename: string }>>(
+    `/documents/${id}/presentation`,
+    body ?? {}
+  );
+}
+
+// Download file helper
+export function downloadFile(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+

@@ -2,7 +2,8 @@ import { FormEvent, ReactNode, useState } from 'react';
 import { getToken, setToken, setUserId } from '../api/client';
 
 const QUANTUM_CHAT_API =
-  import.meta.env.VITE_QUANTUMCHAT_API_URL ?? 'http://localhost:5000/api';
+  import.meta.env.VITE_QUANTUMCHAT_API_URL ||
+  (import.meta.env.DEV ? 'http://localhost:5000/api' : '');
 
 export function LoginGate({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(Boolean(getToken()));
@@ -18,6 +19,11 @@ export function LoginGate({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError('');
     try {
+      if (!QUANTUM_CHAT_API) {
+        throw new Error(
+          'VITE_QUANTUMCHAT_API_URL is not configured for this deployment.'
+        );
+      }
       const response = await fetch(`${QUANTUM_CHAT_API}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

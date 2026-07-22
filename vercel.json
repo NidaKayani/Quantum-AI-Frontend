@@ -5,6 +5,10 @@
       "destination": "https://quantum-ai-backend.vercel.app/api/v1/:path*"
     },
     {
+      "source": "/qc-api/:path*",
+      "destination": "https://quantum-chat-backend.vercel.app/api/:path*"
+    },
+    {
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }

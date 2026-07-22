@@ -1,9 +1,20 @@
 import { FormEvent, ReactNode, useState } from 'react';
 import { getToken, setToken, setUserId } from '../api/client';
 
-const QUANTUM_CHAT_API =
-  import.meta.env.VITE_QUANTUMCHAT_API_URL ||
-  (import.meta.env.DEV ? 'http://localhost:5000/api' : '');
+/**
+ * Production must stay same-origin (/qc-api → vercel rewrite → Quantum Chat).
+ * Absolute Chat backend URLs cause CORS failures from ai.quantumlogicslimited.com.
+ */
+function resolveQuantumChatApi(): string {
+  const fromEnv = String(import.meta.env.VITE_QUANTUMCHAT_API_URL ?? '').trim();
+  if (import.meta.env.DEV) {
+    return fromEnv || 'http://localhost:5000/api';
+  }
+  if (fromEnv.startsWith('/')) return fromEnv.replace(/\/$/, '') || '/qc-api';
+  return '/qc-api';
+}
+
+const QUANTUM_CHAT_API = resolveQuantumChatApi();
 
 export function LoginGate({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(Boolean(getToken()));
@@ -19,11 +30,6 @@ export function LoginGate({ children }: { children: ReactNode }) {
     setSubmitting(true);
     setError('');
     try {
-      if (!QUANTUM_CHAT_API) {
-        throw new Error(
-          'VITE_QUANTUMCHAT_API_URL is not configured for this deployment.'
-        );
-      }
       const response = await fetch(`${QUANTUM_CHAT_API}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

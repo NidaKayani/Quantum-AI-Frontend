@@ -24,6 +24,10 @@ npm run preview  # preview production build
 
 > **Note:** The backend must be running on port **5001**. Vite proxies `/api` to `http://localhost:5001`.
 
+## Auth
+
+Quantum AI uses its **own** Sign up / Sign in screen (teal ocean branding). Create an account in the AI app — you no longer need QuantumChat messenger credentials.
+
 ## Features
 
 - Streaming AI chat

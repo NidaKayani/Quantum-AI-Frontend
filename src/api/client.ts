@@ -28,6 +28,12 @@ export function setToken(token: string) {
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(QUANTUM_CHAT_TOKEN_KEY);
+}
+
+export function clearSession() {
+  clearToken();
+  localStorage.removeItem(USER_ID_KEY);
 }
 
 function authHeaders(): HeadersInit {
@@ -61,6 +67,34 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return parseJson<T>(res);
+}
+
+export type AiAuthUser = {
+  id: string;
+  email: string;
+  displayName: string;
+};
+
+export async function registerAiAccount(input: {
+  email: string;
+  password: string;
+  displayName?: string;
+}) {
+  const result = await apiPost<{
+    success: boolean;
+    data?: { token: string; user: AiAuthUser };
+    error?: string;
+  }>('/auth/register', input);
+  return result.data!;
+}
+
+export async function loginAiAccount(input: { email: string; password: string }) {
+  const result = await apiPost<{
+    success: boolean;
+    data?: { token: string; user: AiAuthUser };
+    error?: string;
+  }>('/auth/login', input);
+  return result.data!;
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {

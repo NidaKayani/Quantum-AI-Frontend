@@ -23,6 +23,7 @@ import {
   downloadDocumentConversion,
   listModels,
 } from './api/client';
+import { useAuthSession } from './components/LoginGate';
 import type { ChatMessage, Conversation, DocumentItem } from './types';
 
 
@@ -42,6 +43,7 @@ type ChatFilter = 'all' | 'archived';
 
 
 export default function App() {
+  const { logout } = useAuthSession();
   const [tab, setTab] = useState<SidebarTab>('chats');
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [search, setSearch] = useState('');
@@ -676,7 +678,12 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
-          {online ? '● API connected' : '○ API offline — start backend on port 5001'}
+          <p className="sidebar-status">
+            {online ? '● API connected' : '○ API offline — start backend on port 5001'}
+          </p>
+          <button type="button" className="btn btn-logout" onClick={logout}>
+            Log out
+          </button>
         </div>
       </aside>
 

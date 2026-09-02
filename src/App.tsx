@@ -621,7 +621,11 @@ export default function App() {
 
         <div className="sidebar-footer">
           <p className="sidebar-status">
-            {online ? '● API connected' : '○ API offline — start backend on port 5001'}
+            {online
+              ? '● API connected'
+              : import.meta.env.PROD
+                ? '○ API offline'
+                : '○ API offline — start backend on port 5001'}
           </p>
           <button type="button" className="btn btn-logout" onClick={logout}>
             Log out

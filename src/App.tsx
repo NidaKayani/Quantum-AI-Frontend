@@ -18,14 +18,12 @@ import {
   streamChat,
   uploadDocuments,
   listModels,
+  downloadConversationExport
 } from './api/client';
 import { useAuthSession } from './components/LoginGate';
 import type { ChatMessage, Conversation, DocumentItem } from './types';
 import { filterChatModels, pickDefaultChatModel } from './utils/chatModels';
-
-
-
-const LOGO_SRC = '/logo.png';
+import { useTheme } from './context/ThemeContext';
 
 const SUGGESTIONS = [
   'Explain quantum computing in simple terms',
@@ -37,10 +35,12 @@ const SUGGESTIONS = [
 type SidebarTab = 'chats' | 'documents';
 type ChatFilter = 'all' | 'archived';
 
-
-
 export default function App() {
+
   const { logout } = useAuthSession();
+  const { theme, themes } = useTheme();
+  const logoSrc = themes.find((t) => t.id === theme)?.logo ?? '/logo.png';
+
   const [tab, setTab] = useState<SidebarTab>('chats');
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [search, setSearch] = useState('');
@@ -57,16 +57,20 @@ export default function App() {
   const [renameValue, setRenameValue] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversationCursor, setConversationCursor] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
+  const [selectedModel, setSelectedModel] = useState('openai/gpt-oss-120b');
   const [webSearch, setWebSearch] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
   const [lastPresentationMsg, setLastPresentationMsg] = useState<ChatMessage | null>(null);
-  
+
 
   const activeConversation = conversations.find((c) => c._id === activeConversationId);
   const activeTitle = activeConversation?.title ?? 'New conversation';
+
+  // add near your other useState declarations
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
 
   const loadConversations = useCallback(async (q?: string, filter: ChatFilter = chatFilter) => {
     try {
@@ -108,9 +112,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadConversations(search, chatFilter);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    loadConversations(debouncedSearch, chatFilter);
     loadDocuments();
-  }, [loadConversations, loadDocuments, search, chatFilter]);
+  }, [loadConversations, loadDocuments, debouncedSearch, chatFilter]);
 
   useEffect(() => {
     listModels()
@@ -321,8 +330,8 @@ export default function App() {
     const sdkFormat =
       format === 'word' ? 'docx'
         : format === 'markdown' ? 'md'
-        : format === 'text' ? 'txt'
-        : 'pdf';
+          : format === 'text' ? 'txt'
+            : 'pdf';
 
     const sourceFormat = format === 'text' ? 'txt' : 'md';
     const fileName = sourceFormat === 'md' ? 'answer.md' : 'answer.txt';
@@ -341,28 +350,28 @@ export default function App() {
         },
       });
 
-    const ext =
-      format === 'word' ? 'docx'
-        : format === 'markdown' ? 'md'
-        : format === 'text' ? 'txt'
-        : 'pdf';
+      const ext =
+        format === 'word' ? 'docx'
+          : format === 'markdown' ? 'md'
+            : format === 'text' ? 'txt'
+              : 'pdf';
 
-    const downloadName = `answer.${ext}`;
+      const downloadName = `answer.${ext}`;
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = downloadName;
-    a.click();
-    URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = downloadName;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('FormatConvert failed', err);
 
       const fallbackName =
         format === 'word' ? 'answer.docx'
           : format === 'markdown' ? 'answer.md'
-          : format === 'text' ? 'answer.txt'
-          : 'answer.pdf';
+            : format === 'text' ? 'answer.txt'
+              : 'answer.pdf';
 
       const fallbackBlob = new Blob([text], { type: 'text/plain;charset=utf-8' });
       const fallbackUrl = URL.createObjectURL(fallbackBlob);
@@ -440,7 +449,7 @@ export default function App() {
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="brand">
-            <img src={LOGO_SRC} alt="Quantum AI" className="brand-logo" />
+            <img src={logoSrc} alt="Quantum AI" className="brand-logo" />
             <div>
               <h1>Quantum AI</h1>
               <p>Powered by Groq</p>
@@ -561,6 +570,7 @@ export default function App() {
                         setRenameValue(conv.title);
                       }}
                       onArchive={(e) => handleArchive(conv, e)}
+                      onExport={() => downloadConversationExport(conv._id, conv.title)}
                       onDelete={() => handleDeleteConversation(conv._id)}
                     />
                   </div>
@@ -580,40 +590,40 @@ export default function App() {
             documents.map((doc) => {
               const inChat = attachedDocs.some((d) => d._id === doc._id);
               return (
-              <div
-                key={doc._id}
-                className={`list-item ${inChat ? 'active' : ''}`}
-                role="button"
-                tabIndex={0}
-                title={inChat ? 'Remove from chat context' : 'Use this document in chat'}
-                onClick={() => toggleDocumentInChat(doc)}
-                onKeyDown={(e) => e.key === 'Enter' && toggleDocumentInChat(doc)}
-              >
-                <span className="list-item-title">📄 {doc.originalName}</span>
-                <span className="list-item-meta">
-                  {(doc.wordCount ?? 0).toLocaleString()} words
-                  {doc.pageCount ? ` · ${doc.pageCount} pages` : ''}
-                  {inChat ? ' · in chat' : ''}
-                  {' · '}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteDocument(doc._id);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                <div
+                  key={doc._id}
+                  className={`list-item ${inChat ? 'active' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  title={inChat ? 'Remove from chat context' : 'Use this document in chat'}
+                  onClick={() => toggleDocumentInChat(doc)}
+                  onKeyDown={(e) => e.key === 'Enter' && toggleDocumentInChat(doc)}
+                >
+                  <span className="list-item-title">📄 {doc.originalName}</span>
+                  <span className="list-item-meta">
+                    {(doc.wordCount ?? 0).toLocaleString()} words
+                    {doc.pageCount ? ` · ${doc.pageCount} pages` : ''}
+                    {inChat ? ' · in chat' : ''}
+                    {' · '}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteDocument(doc._id);
-                      }
-                    }}
-                    style={{ color: '#f87171', cursor: 'pointer' }}
-                  >
-                    Delete
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.stopPropagation();
+                          handleDeleteDocument(doc._id);
+                        }
+                      }}
+                      style={{ color: '#f87171', cursor: 'pointer' }}
+                    >
+                      Delete
+                    </span>
                   </span>
-                </span>
-              </div>
+                </div>
               );
             })
           )}
@@ -621,11 +631,26 @@ export default function App() {
 
         <div className="sidebar-footer">
           <p className="sidebar-status">
+<<<<<<< HEAD
             {online
               ? '● API connected'
               : import.meta.env.PROD
                 ? '○ API offline'
                 : '○ API offline — start backend on port 5001'}
+=======
+            <span
+              className="status-dot"
+              style={
+                !online
+                  ? {
+                    background: 'var(--danger)',
+                    boxShadow: '0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent)',
+                  }
+                  : undefined
+              }
+            />
+            {online ? 'API connected' : 'API offline — start backend on port 5001'}
+>>>>>>> 8aea9c6e74ea19d0bec7b694ee6f8b9b02b207b5
           </p>
           <button type="button" className="btn btn-logout" onClick={logout}>
             Log out
@@ -644,7 +669,7 @@ export default function App() {
             ☰
           </button>
           <div className="chat-header-brand">
-            <img src={LOGO_SRC} alt="Quantum AI" />
+            <img src={logoSrc} alt="Quantum AI" />
             <div>
               <h2>{activeTitle}</h2>
               {(attachedDocs.length > 0 || webSearch || loading) && (
@@ -661,58 +686,69 @@ export default function App() {
           </div>
         </header>
 
-        {error && <div className="error-banner">{error}</div>}
-
-        <div className="chat-thread" ref={threadRef}>
-          {messages.length === 0 ? (
-            <div className="empty-state">
-              <img src="/logo.png" alt="Quantum AI" className="brand-logo-lg" />
-              <h3>How can I help you today?</h3>
-              <p>
-                Upload a document, then ask in plain language — Quantum AI picks the right format
-                (Markdown for a README, quiz, summary, slides, and more).
-              </p>
-              <div className="suggestion-grid">
-                {SUGGESTIONS.map((s) => (
-                  <button key={s} type="button" className="suggestion" onClick={() => handleSend(s)}>
-                    {s}
-                  </button>
-                ))}
+        {error && <div className="error-banner" role="alert">{error}</div>}
+        <>
+          <div className="chat-thread" ref={threadRef}>
+            {messages.length === 0 ? (
+              <div className="empty-state">
+                <div className="qa-hero">
+                  <div className="qa-hero-content">
+                    <div className="qa-hero-greeting">Welcome back</div>
+                    <h3>What will you explore today?</h3>
+                    <p>
+                      Upload documents, ask questions, or pick a suggestion below to get started.
+                    </p>
+                  </div>
+                </div>
+                <div className="qa-chips">
+                  {SUGGESTIONS.map((s) => (
+                    <button key={s} type="button" className="qa-chip" onClick={() => handleSend(s)}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : (
-            messages.map((m, idx) => (
-              <div key={m.id} className="message-with-search">
-                {m.role === 'assistant' && m.searchResults && (
-                  <SearchResultsCard payload={m.searchResults} />
-                )}
-                <MessageBubble
-                  message={m}
-                  streaming={loading && idx === lastAssistantIndex && m.role === 'assistant'}
-                  isLastAssistant={idx === lastAssistantIndex && m.role === 'assistant'}
-                  isLastUser={idx === lastUserIndex && m.role === 'user'}
-                  onRegenerate={
-                    idx === lastAssistantIndex && m.role === 'assistant' && !loading
-                      ? handleRegenerate
-                      : undefined
-                  }
-                  onRetry={
-                    idx === lastAssistantIndex && m.role === 'assistant' && !loading
-                      ? handleRetry
-                      : undefined
-                  }
-                  onEdit={
-                    idx === lastUserIndex && m.role === 'user' && !loading
-                      ? () => handleEditPrompt(m)
-                      : undefined
-                  }
-                  onDownload={m.role === 'assistant' ? handleDownloadPresentation : undefined}
-                  onRequestChanges={m.downloadable ? handleRequestPresentationChanges : undefined}
-                />
-              </div>
-            ))
-          )}
-        </div>
+            ) : (
+              messages.map((m, idx) => (
+                <div key={m.id} className="message-with-search">
+                  {m.role === 'assistant' && m.searchResults && (
+                    <SearchResultsCard payload={m.searchResults} />
+                  )}
+                  <MessageBubble
+                    message={m}
+                    streaming={loading && idx === lastAssistantIndex && m.role === 'assistant'}
+                    isLastAssistant={idx === lastAssistantIndex && m.role === 'assistant'}
+                    isLastUser={idx === lastUserIndex && m.role === 'user'}
+                    onRegenerate={
+                      idx === lastAssistantIndex && m.role === 'assistant' && !loading
+                        ? handleRegenerate
+                        : undefined
+                    }
+                    onRetry={
+                      idx === lastAssistantIndex && m.role === 'assistant' && !loading
+                        ? handleRetry
+                        : undefined
+                    }
+                    onEdit={
+                      idx === lastUserIndex && m.role === 'user' && !loading
+                        ? () => handleEditPrompt(m)
+                        : undefined
+                    }
+                    onDownload={m.role === 'assistant' ? handleDownloadPresentation : undefined}
+                    onRequestChanges={m.downloadable ? handleRequestPresentationChanges : undefined}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {loading
+              ? 'Quantum AI is responding'
+              : messages[lastAssistantIndex]?.role === 'assistant'
+                ? 'Quantum AI has replied'
+                : ''}
+          </div>
+        </>
 
         <ChatInput
           value={input}
@@ -730,7 +766,7 @@ export default function App() {
       </main>
     </div>
   );
-  
+
 }
 
 

@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeId } from '../themes';
 
@@ -19,6 +18,7 @@ export function ThemeSwitcher({ variant = 'inline', onSelect }: ThemeSwitcherPro
       <div className="theme-swatch-row">
         {themes.map((item) => {
           const active = theme === item.id;
+          const [bg, accent] = item.swatch;
           return (
             <button
               key={item.id}
@@ -31,15 +31,15 @@ export function ThemeSwitcher({ variant = 'inline', onSelect }: ThemeSwitcherPro
                 setTheme(item.id);
                 onSelect?.(item.id);
               }}
-              style={
-                {
-                  '--swatch-a': item.swatch[0],
-                  '--swatch-b': item.swatch[1],
-                  '--swatch-c': item.swatch[2],
-                } as CSSProperties
-              }
             >
-              <span className="theme-swatch-orb" aria-hidden="true" />
+              <div
+                className="theme-swatch-preview"
+                style={{
+                  background: `linear-gradient(135deg, ${bg} 0%, ${accent} 100%)`,
+                }}
+              >
+                <img src={item.logo} alt="" className="theme-swatch-logo" />
+              </div>
               <span className="theme-swatch-name">{item.label}</span>
               {variant === 'dialog' ? (
                 <span className="theme-swatch-desc">{item.description}</span>

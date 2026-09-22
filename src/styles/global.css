@@ -796,6 +796,7 @@ button {
   border-radius: 16px;
   padding: 0.85rem 1rem;
   max-width: min(720px, 100%);
+  min-width: 0;
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
 }
 
@@ -1175,6 +1176,51 @@ button {
   flex-direction: column;
   gap: 0.35rem;
   max-width: min(720px, 100%);
+  min-width: 0;
+}
+
+.md-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin: 0.65rem 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface-solid);
+}
+
+.bubble.assistant table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.bubble.assistant th,
+.bubble.assistant td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: normal;
+}
+
+.bubble.assistant th {
+  background: var(--bg-muted);
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.bubble.assistant tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg-muted) 42%, var(--bg-assistant));
+}
+
+.bubble.assistant td p,
+.bubble.assistant th p {
+  margin: 0;
 }
 
 .bubble-wrap.user {

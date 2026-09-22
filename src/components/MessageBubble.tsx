@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import type { ChatMessage } from '../types';
 import { safeMarkdownUrl } from '../utils/safeUrl';
@@ -149,9 +151,15 @@ export function MessageBubble({
           ) : message.content ? (
             <ReactMarkdown
               urlTransform={safeMarkdownUrl}
-              rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
               components={{
                 pre: ({ children }) => <>{children}</>,
+                table: ({ children }) => (
+                  <div className="md-table-wrap">
+                    <table>{children}</table>
+                  </div>
+                ),
                 code: ({ className, children, ...props }) => {
                   const isBlock = Boolean(className) || String(children).includes('\n');
                   if (!isBlock) {

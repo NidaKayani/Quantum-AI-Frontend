@@ -1,11 +1,19 @@
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+export interface RagSource {
+  documentId: string;
+  filename: string;
+  part: number;
+  snippet: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
   createdAt?: string;
   searchResults?: SearchResultsPayload;
+  ragSources?: RagSource[];
   downloadable?: {
     text: string;
     filename: string;

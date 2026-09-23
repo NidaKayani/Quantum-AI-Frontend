@@ -158,7 +158,11 @@ export interface StreamChatOptions {
   model?: string;
   webSearch?: boolean;
   searchSources?: Array<'google' | 'youtube' | 'reddit'>;
-  onStart?: (conversationId: string, searchResults?: import('../types').SearchResultsPayload) => void;
+  onStart?: (
+    conversationId: string,
+    searchResults?: import('../types').SearchResultsPayload,
+    ragSources?: import('../types').RagSource[]
+  ) => void;
   onChunk: (text: string) => void;
   onDone?: (payload: { conversationId: string; content: string }) => void;
   onError?: (message: string) => void;
@@ -219,7 +223,8 @@ export async function streamChat(options: StreamChatOptions) {
         const payload = JSON.parse(data) as Record<string, unknown>;
         if (event === 'start' && typeof payload.conversationId === 'string') {
           const searchResults = payload.searchResults as import('../types').SearchResultsPayload | undefined;
-          options.onStart?.(payload.conversationId, searchResults);
+          const ragSources = readRagSources(payload.ragSources);
+          options.onStart?.(payload.conversationId, searchResults, ragSources);
         } else if (event === 'chunk' && typeof payload.content === 'string') {
           options.onChunk(payload.content);
         } else if (event === 'done') {
@@ -235,6 +240,24 @@ export async function streamChat(options: StreamChatOptions) {
       }
     }
   }
+}
+
+function readRagSources(value: unknown): import('../types').RagSource[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const sources = value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    if (typeof row.filename !== 'string' || typeof row.snippet !== 'string') return [];
+    return [
+      {
+        documentId: String(row.documentId ?? ''),
+        filename: row.filename,
+        part: Number(row.part ?? 0),
+        snippet: row.snippet,
+      },
+    ];
+  });
+  return sources.length ? sources : undefined;
 }
 
 export async function searchWeb(

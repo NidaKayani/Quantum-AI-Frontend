@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageBubble } from './components/MessageBubble';
 import { ChatInput } from './components/ChatInput';
 import { SearchResultsCard } from './components/SearchResultsCard';
+import { RagSourcesCard } from './components/RagSourcesCard';
 import { ThemeMenu } from './components/ThemeMenu';
 import { ConversationActionsMenu } from './components/ConversationActionsMenu';
 import {
@@ -156,8 +157,21 @@ export default function App() {
     setActiveConversationId(id);
     setError(null);
     try {
-      const { messages: history } = await fetchConversation(id);
+      const { messages: history, conversation } = await fetchConversation(id);
       setMessages(history);
+      const ids = new Set((conversation?.documentIds ?? []).map(String));
+      if (!ids.size) {
+        setAttachedDocs([]);
+        return;
+      }
+      const known = documents.filter((doc) => ids.has(doc._id));
+      if (known.length === ids.size) {
+        setAttachedDocs(known);
+        return;
+      }
+      const all = await fetchDocuments();
+      setDocuments(all);
+      setAttachedDocs(all.filter((doc) => ids.has(doc._id)));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load conversation');
     }
@@ -210,12 +224,20 @@ export default function App() {
         model: selectedModel || undefined,
         webSearch,
         signal: abortRef.current.signal,
-        onStart: (id, searchResults) => {
+        onStart: (id, searchResults, ragSources) => {
           convId = id;
           if (!activeConversationId) setActiveConversationId(id);
-          if (searchResults) {
+          if (searchResults || ragSources?.length) {
             setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? { ...m, searchResults } : m))
+              prev.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      searchResults: searchResults ?? m.searchResults,
+                      ragSources: ragSources ?? m.ragSources,
+                    }
+                  : m
+              )
             );
           }
         },
@@ -232,11 +254,15 @@ export default function App() {
       if (convId) {
         const { messages: history } = await fetchConversation(convId);
         setMessages((prev) => {
-          const withSearch = prev.find((m) => m.id === assistantId)?.searchResults;
-          if (!withSearch) return history;
+          const live = prev.find((m) => m.id === assistantId);
+          if (!live?.searchResults && !live?.ragSources?.length) return history;
           return history.map((m, index) =>
             index === history.length - 1 && m.role === 'assistant'
-              ? { ...m, searchResults: withSearch }
+              ? {
+                  ...m,
+                  searchResults: m.searchResults ?? live.searchResults,
+                  ragSources: m.ragSources?.length ? m.ragSources : live.ragSources,
+                }
               : m
           );
         });
@@ -709,6 +735,9 @@ export default function App() {
                 <div key={m.id} className="message-with-search">
                   {m.role === 'assistant' && m.searchResults && (
                     <SearchResultsCard payload={m.searchResults} />
+                  )}
+                  {m.role === 'assistant' && m.ragSources && m.ragSources.length > 0 && (
+                    <RagSourcesCard sources={m.ragSources} />
                   )}
                   <MessageBubble
                     message={m}

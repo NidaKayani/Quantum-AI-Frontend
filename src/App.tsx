@@ -23,8 +23,18 @@ import {
 } from './api/client';
 import { useAuthSession } from './components/LoginGate';
 import type { ChatMessage, Conversation, DocumentItem } from './types';
-import { filterChatModels, pickDefaultChatModel } from './utils/chatModels';
+import { filterChatModels, resolvePaceModel, type ModelPace } from './utils/chatModels';
 import { useTheme } from './context/ThemeContext';
+
+const MODEL_PACE_STORAGE_KEY = 'quantum-ai-model-pace';
+
+function readSavedModelPace(): ModelPace {
+  try {
+    return localStorage.getItem(MODEL_PACE_STORAGE_KEY) === 'fast' ? 'fast' : 'smart';
+  } catch {
+    return 'smart';
+  }
+}
 
 const SUGGESTIONS = [
   'Explain quantum computing in simple terms',
@@ -58,7 +68,8 @@ export default function App() {
   const [renameValue, setRenameValue] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversationCursor, setConversationCursor] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('openai/gpt-oss-120b');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelPace, setModelPace] = useState<ModelPace>(readSavedModelPace);
   const [webSearch, setWebSearch] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -68,6 +79,10 @@ export default function App() {
 
   const activeConversation = conversations.find((c) => c._id === activeConversationId);
   const activeTitle = activeConversation?.title ?? 'New conversation';
+  const selectedModel = useMemo(
+    () => resolvePaceModel(modelPace, availableModels),
+    [modelPace, availableModels],
+  );
 
   // add near your other useState declarations
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -125,13 +140,7 @@ export default function App() {
   useEffect(() => {
     listModels()
       .then((available) => {
-        const chatModels = filterChatModels(available);
-        const next = chatModels.length
-          ? chatModels
-          : [pickDefaultChatModel([])];
-        setSelectedModel((current) =>
-          next.includes(current) ? current : pickDefaultChatModel(next),
-        );
+        setAvailableModels(filterChatModels(available));
       })
       .catch(() => undefined);
   }, []);
@@ -704,6 +713,24 @@ export default function App() {
             </div>
           </div>
           <div className="chat-header-actions">
+            <select
+              className="model-select"
+              aria-label="Model"
+              title={`Using ${selectedModel}`}
+              value={modelPace}
+              onChange={(event) => {
+                const next: ModelPace = event.target.value === 'fast' ? 'fast' : 'smart';
+                setModelPace(next);
+                try {
+                  localStorage.setItem(MODEL_PACE_STORAGE_KEY, next);
+                } catch {
+                  // ignore private-mode storage failures
+                }
+              }}
+            >
+              <option value="fast">Fast</option>
+              <option value="smart">Smart</option>
+            </select>
             <ThemeMenu tone="header" />
           </div>
         </header>

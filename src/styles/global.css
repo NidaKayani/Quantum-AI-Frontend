@@ -1,9 +1,14 @@
 .model-select {
   max-width: 220px;
-  border: 0;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--border);
+  background: var(--bg-surface-solid);
+  color: var(--text-primary);
   font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
 }
 
 :root,
@@ -1354,6 +1359,60 @@ button {
   gap: 0.65rem;
 }
 
+.rag-sources-card {
+  margin: 0 0 0 3.25rem;
+  max-width: min(720px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-assistant);
+  color: var(--text-primary);
+  padding: 0.7rem 0.85rem;
+}
+
+.rag-sources-card header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.55rem;
+}
+
+.rag-sources-card header strong {
+  font-size: 0.85rem;
+  color: var(--accent-text);
+}
+
+.rag-sources-card header span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.rag-sources-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.rag-sources-card li {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.rag-source-file {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.rag-sources-card p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .search-results-card {
   margin: 0 0 0 3.25rem;
   max-width: min(720px, 100%);
@@ -1782,7 +1841,8 @@ button {
     padding: 0.85rem 0.9rem calc(0.9rem + var(--safe-bottom));
   }
 
-  .search-results-card {
+  .search-results-card,
+  .rag-sources-card {
     margin-left: 0;
   }
 }

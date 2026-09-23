@@ -17,6 +17,24 @@ const NON_CHAT_PATTERNS = [
   /rerank/i,
 ];
 
+export type ModelPace = 'fast' | 'smart';
+
+/** Smaller, quicker chat models. First available id is used for Fast. */
+const FAST_CHAT_MODELS = [
+  'llama-3.1-8b-instant',
+  'openai/gpt-oss-20b',
+  'groq/compound-mini',
+  'allam-2-7b',
+] as const;
+
+/** Larger chat models. First available id is used for Smart. */
+const SMART_CHAT_MODELS = [
+  'openai/gpt-oss-120b',
+  'llama-3.3-70b-versatile',
+  'qwen/qwen3.6-27b',
+  'groq/compound',
+] as const;
+
 /** Preferred order for the chat model picker (first match wins for default). */
 export const PREFERRED_CHAT_MODELS = [
   'openai/gpt-oss-120b',
@@ -55,4 +73,14 @@ export function pickDefaultChatModel(available: string[], fallback = 'openai/gpt
     if (available.includes(preferred)) return preferred;
   }
   return available[0] || fallback;
+}
+
+/** Map the Fast / Smart picker onto a real chat model the account can run. */
+export function resolvePaceModel(pace: ModelPace, available: string[]): string {
+  const preferred = pace === 'fast' ? FAST_CHAT_MODELS : SMART_CHAT_MODELS;
+  const choices = available.length ? available : [...preferred];
+  for (const id of preferred) {
+    if (choices.includes(id)) return id;
+  }
+  return choices[0] || preferred[0];
 }

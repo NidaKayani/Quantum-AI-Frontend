@@ -1,6 +1,6 @@
 import type { ApiResponse } from '../types';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
-import type { ChatMessage, Conversation, DocumentItem } from '../types';
+import type { ChatMessage, Conversation, DocumentItem, RagSource } from '../types';
 
 export type ListConversationsParams = {
   q?: string;
@@ -47,7 +47,13 @@ export async function fetchConversation(id: string) {
   const res = await apiGet<
     ApiResponse<{
       conversation: Conversation;
-      messages: Array<{ _id: string; role: string; content: string; createdAt: string }>;
+      messages: Array<{
+        _id: string;
+        role: string;
+        content: string;
+        createdAt: string;
+        metadata?: { ragSources?: RagSource[] };
+      }>;
     }>
   >(`/conversations/${id}`);
   const messages: ChatMessage[] =
@@ -56,6 +62,7 @@ export async function fetchConversation(id: string) {
       role: m.role as ChatMessage['role'],
       content: m.content,
       createdAt: m.createdAt,
+      ragSources: Array.isArray(m.metadata?.ragSources) ? m.metadata.ragSources : undefined,
     })) ?? [];
   return { conversation: res.data?.conversation, messages };
 }

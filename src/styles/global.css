@@ -969,14 +969,16 @@ button {
 }
 
 .education-result {
-  max-height: 38vh;
-  overflow: auto;
-  margin: 0 1.25rem 0.75rem;
-  padding: 1rem 1.15rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--bg-assistant);
+  width: min(760px, 100%);
+  margin: 0 auto 2rem;
+  max-height: none;
+  overflow: visible;
+  padding: 0.25rem 0.15rem 2rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-primary);
+  font-size: 1rem;
 }
 
 .education-result header {
@@ -984,21 +986,33 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.2rem 0 0.75rem;
+  background: var(--bg-chat);
 }
 
 .education-result h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .education-result .markdown-body h1,
 .education-result .markdown-body h2,
 .education-result .markdown-body h3,
 .education-result .markdown-body h4 {
-  margin: 0.85rem 0 0.3rem;
-  font-size: 1rem;
-  line-height: 1.35;
+  margin: 1.15rem 0 0.4rem;
+  font-size: 1.2rem;
+  line-height: 1.3;
   color: var(--text-primary);
+}
+
+.education-result .markdown-body h1 {
+  font-size: 1.45rem;
+  margin-top: 0.2rem;
 }
 
 .education-result .markdown-body p,
@@ -1946,8 +1960,7 @@ button {
     padding: 1rem 0.9rem;
   }
 
-  .error-banner,
-  .education-result {
+  .error-banner {
     margin-left: 0.9rem;
     margin-right: 0.9rem;
   }

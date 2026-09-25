@@ -2190,6 +2190,68 @@ button {
   color: var(--accent-text);
 }
 
+.confirm-delete-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(8, 12, 18, 0.58);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1.25rem, var(--safe-top)) max(1.25rem, var(--safe-right))
+    max(1.25rem, var(--safe-bottom)) max(1.25rem, var(--safe-left));
+}
+
+.confirm-delete-dialog {
+  width: min(420px, 100%);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface-solid);
+  color: var(--text-primary);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32);
+  padding: 1.25rem 1.3rem 1.1rem;
+}
+
+.confirm-delete-dialog h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.confirm-delete-dialog p {
+  margin: 0.45rem 0 0;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.confirm-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.15rem;
+}
+
+.confirm-delete-actions button {
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-surface-solid);
+  color: var(--text-primary);
+}
+
+.confirm-delete-actions button.danger {
+  border-color: transparent;
+  background: var(--danger);
+  color: white;
+}
+
+.confirm-delete-actions button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .theme-dialog-backdrop {
   position: fixed;
   inset: 0;

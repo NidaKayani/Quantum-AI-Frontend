@@ -3,6 +3,7 @@ import { MessageBubble } from './components/MessageBubble';
 import { ChatInput } from './components/ChatInput';
 import { SearchResultsCard } from './components/SearchResultsCard';
 import { RagSourcesCard } from './components/RagSourcesCard';
+import { EducationResultPanel, type EducationResult } from './components/EducationResult';
 import { ThemeMenu } from './components/ThemeMenu';
 import { ConversationActionsMenu } from './components/ConversationActionsMenu';
 import {
@@ -12,6 +13,9 @@ import {
   fetchConversation,
   fetchConversationsPage,
   fetchDocuments,
+  generatePresentationPlan,
+  generateQuiz,
+  summarizeDocument,
   truncateFromMessage,
   updateConversation,
 } from './api/conversations';
@@ -71,6 +75,8 @@ export default function App() {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelPace, setModelPace] = useState<ModelPace>(readSavedModelPace);
   const [webSearch, setWebSearch] = useState(false);
+  const [educationBusy, setEducationBusy] = useState<{ id: string; action: 'summarize' | 'quiz' | 'slides' } | null>(null);
+  const [educationResult, setEducationResult] = useState<EducationResult | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -353,8 +359,47 @@ export default function App() {
       await deleteDocument(id);
       setDocuments((prev) => prev.filter((d) => d._id !== id));
       setAttachedDocs((prev) => prev.filter((d) => d._id !== id));
+      setEducationResult((current) =>
+        current && documents.find((doc) => doc._id === id)?.originalName === current.documentName
+          ? null
+          : current
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete document');
+    }
+  };
+
+  const runEducationAction = async (doc: DocumentItem, action: 'summarize' | 'quiz' | 'slides') => {
+    if (educationBusy) return;
+    setEducationBusy({ id: doc._id, action });
+    setError(null);
+    try {
+      if (action === 'summarize') {
+        const data = await summarizeDocument(doc._id);
+        setEducationResult({ kind: 'summary', documentName: doc.originalName, summary: data.summary });
+      } else if (action === 'quiz') {
+        const data = await generateQuiz(doc._id, { count: 5, difficulty: 'medium' });
+        setEducationResult({
+          kind: 'quiz',
+          documentName: doc.originalName,
+          title: data.title,
+          questions: data.questions,
+        });
+      } else {
+        const plan = await generatePresentationPlan(doc._id);
+        setEducationResult({
+          kind: 'slides',
+          documentName: doc.originalName,
+          title: plan.presentationTitle,
+          subtitle: plan.subtitle,
+          slides: plan.slides,
+        });
+      }
+      setSidebarOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not run that document action');
+    } finally {
+      setEducationBusy(null);
     }
   };
 
@@ -624,40 +669,55 @@ export default function App() {
           ) : (
             documents.map((doc) => {
               const inChat = attachedDocs.some((d) => d._id === doc._id);
+              const busyHere = educationBusy?.id === doc._id;
+              const label = (action: 'summarize' | 'quiz' | 'slides', idle: string, pending: string) =>
+                busyHere && educationBusy?.action === action ? pending : idle;
               return (
                 <div
                   key={doc._id}
-                  className={`list-item ${inChat ? 'active' : ''}`}
-                  role="button"
-                  tabIndex={0}
-                  title={inChat ? 'Remove from chat context' : 'Use this document in chat'}
-                  onClick={() => toggleDocumentInChat(doc)}
-                  onKeyDown={(e) => e.key === 'Enter' && toggleDocumentInChat(doc)}
+                  className={`list-item list-item--doc ${inChat ? 'active' : ''}`}
                 >
-                  <span className="list-item-title">📄 {doc.originalName}</span>
-                  <span className="list-item-meta">
-                    {(doc.wordCount ?? 0).toLocaleString()} words
-                    {doc.pageCount ? ` · ${doc.pageCount} pages` : ''}
-                    {inChat ? ' · in chat' : ''}
-                    {' · '}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteDocument(doc._id);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.stopPropagation();
-                          handleDeleteDocument(doc._id);
-                        }
-                      }}
-                      style={{ color: '#f87171', cursor: 'pointer' }}
-                    >
-                      Delete
+                  <div
+                    className="list-item-body"
+                    role="button"
+                    tabIndex={0}
+                    title={inChat ? 'Remove from chat context' : 'Use this document in chat'}
+                    onClick={() => toggleDocumentInChat(doc)}
+                    onKeyDown={(e) => e.key === 'Enter' && toggleDocumentInChat(doc)}
+                  >
+                    <span className="list-item-title">📄 {doc.originalName}</span>
+                    <span className="list-item-meta">
+                      {(doc.wordCount ?? 0).toLocaleString()} words
+                      {doc.pageCount ? ` · ${doc.pageCount} pages` : ''}
+                      {inChat ? ' · in chat' : ''}
                     </span>
-                  </span>
+                  </div>
+                  <div className="doc-actions">
+                    <button
+                      type="button"
+                      disabled={Boolean(educationBusy)}
+                      onClick={() => runEducationAction(doc, 'summarize')}
+                    >
+                      {label('summarize', 'Summarize', 'Summarizing…')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(educationBusy)}
+                      onClick={() => runEducationAction(doc, 'quiz')}
+                    >
+                      {label('quiz', 'Quiz', 'Making quiz…')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(educationBusy)}
+                      onClick={() => runEducationAction(doc, 'slides')}
+                    >
+                      {label('slides', 'Make slides', 'Making slides…')}
+                    </button>
+                    <button type="button" className="danger" onClick={() => handleDeleteDocument(doc._id)}>
+                      Delete
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -736,6 +796,13 @@ export default function App() {
         </header>
 
         {error && <div className="error-banner" role="alert">{error}</div>}
+        {educationResult && (
+          <EducationResultPanel
+            key={`${educationResult.kind}-${educationResult.documentName}-${educationResult.kind === 'quiz' ? educationResult.title : ''}`}
+            result={educationResult}
+            onClose={() => setEducationResult(null)}
+          />
+        )}
         <>
           <div className="chat-thread" ref={threadRef}>
             {messages.length === 0 ? (

@@ -3,6 +3,14 @@
  * The assistant UI should only offer chat-capable LLMs.
  */
 
+/** Groq no longer serves these ids. They must not be offered in Fast / Smart. */
+const RETIRED_CHAT_MODELS = new Set([
+  'llama-3.1-8b-instant',
+  'llama-3.3-70b-versatile',
+  'llama-3.3-70b-specdec',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+]);
+
 const NON_CHAT_PATTERNS = [
   /whisper/i,
   /transcri/i,
@@ -21,7 +29,6 @@ export type ModelPace = 'fast' | 'smart';
 
 /** Smaller, quicker chat models. First available id is used for Fast. */
 const FAST_CHAT_MODELS = [
-  'llama-3.1-8b-instant',
   'openai/gpt-oss-20b',
   'groq/compound-mini',
   'allam-2-7b',
@@ -30,7 +37,6 @@ const FAST_CHAT_MODELS = [
 /** Larger chat models. First available id is used for Smart. */
 const SMART_CHAT_MODELS = [
   'openai/gpt-oss-120b',
-  'llama-3.3-70b-versatile',
   'qwen/qwen3.6-27b',
   'groq/compound',
 ] as const;
@@ -40,8 +46,6 @@ export const PREFERRED_CHAT_MODELS = [
   'openai/gpt-oss-120b',
   'qwen/qwen3.6-27b',
   'openai/gpt-oss-20b',
-  'llama-3.1-8b-instant',
-  'llama-3.3-70b-versatile',
   'groq/compound',
   'groq/compound-mini',
   'allam-2-7b',
@@ -49,7 +53,7 @@ export const PREFERRED_CHAT_MODELS = [
 
 export function isChatModel(modelId: string): boolean {
   const id = modelId.trim();
-  if (!id) return false;
+  if (!id || RETIRED_CHAT_MODELS.has(id)) return false;
   return !NON_CHAT_PATTERNS.some((pattern) => pattern.test(id));
 }
 

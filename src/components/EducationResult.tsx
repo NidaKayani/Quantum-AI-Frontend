@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
+import { safeMarkdownUrl } from '../utils/safeUrl';
 
 export type QuizQuestion = {
   question: string;
@@ -54,22 +58,22 @@ export function EducationResultPanel({ result, onClose }: Props) {
         </div>
       </header>
 
-      {result.kind === 'summary' && <p>{result.summary}</p>}
+      {result.kind === 'summary' && <MarkdownBody text={result.summary} />}
 
       {result.kind === 'quiz' && (
         <ol>
           {result.questions.map((item, index) => (
             <li key={`${index}-${item.question}`}>
-              <strong>{item.question}</strong>
+              <MarkdownBody text={item.question} />
               <ul>
                 {item.options.map((option, optionIndex) => (
                   <li key={option}>
-                    {String.fromCharCode(65 + optionIndex)}. {option}
+                    {String.fromCharCode(65 + optionIndex)}. <MarkdownBody inline text={option} />
                     {showAnswers && optionIndex === item.answerIndex ? ' ✓' : ''}
                   </li>
                 ))}
               </ul>
-              {showAnswers && item.explanation ? <p>{item.explanation}</p> : null}
+              {showAnswers && item.explanation ? <MarkdownBody text={item.explanation} /> : null}
             </li>
           ))}
         </ol>
@@ -88,17 +92,34 @@ export function EducationResultPanel({ result, onClose }: Props) {
                 {slide.bullets?.length ? (
                   <ul>
                     {slide.bullets.map((bullet) => (
-                      <li key={bullet}>{bullet}</li>
+                      <li key={bullet}>
+                        <MarkdownBody inline text={bullet} />
+                      </li>
                     ))}
                   </ul>
                 ) : null}
-                {slide.notes ? <p>Notes: {slide.notes}</p> : null}
+                {slide.notes ? <MarkdownBody text={slide.notes} /> : null}
               </li>
             ))}
           </ol>
         </>
       )}
     </section>
+  );
+}
+
+function MarkdownBody({ text, inline = false }: { text: string; inline?: boolean }) {
+  return (
+    <div className={inline ? 'markdown-body markdown-inline' : 'markdown-body'}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeSanitize]}
+        urlTransform={safeMarkdownUrl}
+        components={inline ? { p: ({ children }) => <span>{children}</span> } : undefined}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
   );
 }
 

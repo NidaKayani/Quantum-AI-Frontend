@@ -152,10 +152,13 @@ export async function generatePresentationPlan(
 ) {
   const res = await apiPost<
     ApiResponse<{
-      presentationTitle: string;
-      subtitle?: string;
-      slides: Array<{ type: string; title: string; bullets?: string[]; notes?: string }>;
+      plan: {
+        presentationTitle: string;
+        subtitle?: string;
+        slides: Array<{ type: string; title: string; bullets?: string[]; notes?: string }>;
+      };
     }>
   >(`/presentations/${id}/plan`, options);
-  return res.data!;
+  if (!res.data?.plan) throw new Error('Presentation plan was empty');
+  return res.data.plan;
 }

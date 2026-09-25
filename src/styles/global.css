@@ -986,10 +986,83 @@ button {
   gap: 1rem;
 }
 
+.education-result h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.education-result p {
+  margin: 0.45rem 0 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.education-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
 .education-result header button {
   border: 0;
   background: transparent;
+  color: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.education-result header button:last-child {
   font-size: 1.4rem;
+  line-height: 1;
+}
+
+.list-item--doc {
+  flex-direction: column;
+  align-items: stretch;
+  cursor: default;
+}
+
+.list-item--doc .list-item-body {
+  cursor: pointer;
+}
+
+.doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.doc-actions button {
+  border: 1px solid var(--border-dark);
+  background: var(--sidebar-item-hover);
+  color: var(--sidebar-item);
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.doc-actions button:hover:not(:disabled) {
+  background: var(--sidebar-item-active-bg);
+  border-color: var(--sidebar-item-active-border);
+}
+
+.doc-actions button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.doc-actions button.danger {
+  color: #f87171;
+}
+
+.education-result ul,
+.education-result ol {
+  margin: 0.35rem 0 0;
+  padding-left: 1.15rem;
 }
 
 .education-result li {

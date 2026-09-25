@@ -4,7 +4,7 @@ import { ChatInput } from './components/ChatInput';
 import { SearchResultsCard } from './components/SearchResultsCard';
 import { RagSourcesCard } from './components/RagSourcesCard';
 import { ConfirmDeleteDialog } from './components/ConfirmDeleteDialog';
-import { EducationResultPanel, type EducationResult } from './components/EducationResult';
+import { EducationResultPanel, type EducationResult, type QuizDifficulty } from './components/EducationResult';
 import { ThemeMenu } from './components/ThemeMenu';
 import { ConversationActionsMenu } from './components/ConversationActionsMenu';
 import {
@@ -388,11 +388,13 @@ export default function App() {
         const data = await summarizeDocument(doc._id);
         setEducationResult({ kind: 'summary', documentName: doc.originalName, summary: data.summary });
       } else if (action === 'quiz') {
-        const data = await generateQuiz(doc._id, { count: 5, difficulty: 'medium' });
+        const data = await generateQuiz(doc._id, { count: 10, difficulty: 'medium' });
         setEducationResult({
           kind: 'quiz',
+          documentId: doc._id,
           documentName: doc.originalName,
           title: data.title,
+          difficulty: 'medium',
           questions: data.questions,
         });
       } else {
@@ -408,6 +410,28 @@ export default function App() {
       setSidebarOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not run that document action');
+    } finally {
+      setEducationBusy(null);
+    }
+  };
+
+  const makeQuizHarder = async () => {
+    if (!educationResult || educationResult.kind !== 'quiz' || educationBusy) return;
+    const next: QuizDifficulty = educationResult.difficulty === 'easy' ? 'medium' : 'hard';
+    setEducationBusy({ id: educationResult.documentId, action: 'quiz' });
+    setError(null);
+    try {
+      const data = await generateQuiz(educationResult.documentId, { count: 10, difficulty: next });
+      setEducationResult({
+        kind: 'quiz',
+        documentId: educationResult.documentId,
+        documentName: educationResult.documentName,
+        title: data.title,
+        difficulty: next,
+        questions: data.questions,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not make a harder quiz');
     } finally {
       setEducationBusy(null);
     }
@@ -824,8 +848,10 @@ export default function App() {
           <div className="chat-thread" ref={threadRef}>
             {educationResult && (
               <EducationResultPanel
-                key={`${educationResult.kind}-${educationResult.documentName}-${educationResult.kind === 'quiz' ? educationResult.title : ''}`}
+                key={`${educationResult.kind}-${educationResult.documentName}-${educationResult.kind === 'quiz' ? `${educationResult.difficulty}-${educationResult.title}` : ''}`}
                 result={educationResult}
+                harderPending={educationBusy?.action === 'quiz'}
+                onMakeHarder={educationResult.kind === 'quiz' ? makeQuizHarder : undefined}
                 onClose={() => setEducationResult(null)}
               />
             )}

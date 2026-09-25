@@ -973,10 +973,10 @@ button {
   overflow: auto;
   margin: 0 1.25rem 0.75rem;
   padding: 1rem 1.15rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-assistant);
+  color: var(--text-primary);
 }
 
 .education-result header {
@@ -991,10 +991,52 @@ button {
   font-size: 0.95rem;
 }
 
-.education-result p {
-  margin: 0.45rem 0 0;
-  white-space: pre-wrap;
-  line-height: 1.5;
+.education-result .markdown-body h1,
+.education-result .markdown-body h2,
+.education-result .markdown-body h3,
+.education-result .markdown-body h4 {
+  margin: 0.85rem 0 0.3rem;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.education-result .markdown-body p,
+.education-result .markdown-body ul,
+.education-result .markdown-body ol {
+  margin: 0.4rem 0;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.education-result .markdown-body ul,
+.education-result .markdown-body ol {
+  padding-left: 1.25rem;
+}
+
+.education-result .markdown-body li {
+  margin: 0.2rem 0;
+  white-space: normal;
+}
+
+.education-result .markdown-body strong {
+  font-weight: 700;
+}
+
+.education-result .markdown-inline {
+  display: inline;
+}
+
+.education-result .markdown-inline p {
+  display: inline;
+  margin: 0;
+}
+
+.education-result .markdown-body code {
+  background: var(--bg-muted);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.85em;
 }
 
 .education-result-actions {

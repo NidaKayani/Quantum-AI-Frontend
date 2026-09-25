@@ -3,6 +3,7 @@ import { MessageBubble } from './components/MessageBubble';
 import { ChatInput } from './components/ChatInput';
 import { SearchResultsCard } from './components/SearchResultsCard';
 import { RagSourcesCard } from './components/RagSourcesCard';
+import { ConfirmDeleteDialog } from './components/ConfirmDeleteDialog';
 import { EducationResultPanel, type EducationResult } from './components/EducationResult';
 import { ThemeMenu } from './components/ThemeMenu';
 import { ConversationActionsMenu } from './components/ConversationActionsMenu';
@@ -77,6 +78,10 @@ export default function App() {
   const [webSearch, setWebSearch] = useState(false);
   const [educationBusy, setEducationBusy] = useState<{ id: string; action: 'summarize' | 'quiz' | 'slides' } | null>(null);
   const [educationResult, setEducationResult] = useState<EducationResult | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<
+    { kind: 'conversation' | 'document'; id: string } | null
+  >(null);
+  const [deletePending, setDeletePending] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -348,24 +353,29 @@ export default function App() {
     }
   };
 
-  const handleDeleteConversation = async (id: string) => {
-    await deleteConversation(id);
-    if (activeConversationId === id) startNewChat();
-    await loadConversations(search, chatFilter);
-  };
-
-  const handleDeleteDocument = async (id: string) => {
+  const confirmDelete = async () => {
+    if (!pendingDelete || deletePending) return;
+    setDeletePending(true);
+    setError(null);
     try {
-      await deleteDocument(id);
-      setDocuments((prev) => prev.filter((d) => d._id !== id));
-      setAttachedDocs((prev) => prev.filter((d) => d._id !== id));
-      setEducationResult((current) =>
-        current && documents.find((doc) => doc._id === id)?.originalName === current.documentName
-          ? null
-          : current
-      );
+      if (pendingDelete.kind === 'conversation') {
+        await deleteConversation(pendingDelete.id);
+        if (activeConversationId === pendingDelete.id) startNewChat();
+        await loadConversations(search, chatFilter);
+      } else {
+        const removed = documents.find((doc) => doc._id === pendingDelete.id);
+        await deleteDocument(pendingDelete.id);
+        setDocuments((prev) => prev.filter((d) => d._id !== pendingDelete.id));
+        setAttachedDocs((prev) => prev.filter((d) => d._id !== pendingDelete.id));
+        setEducationResult((current) =>
+          current && removed && current.documentName === removed.originalName ? null : current
+        );
+      }
+      setPendingDelete(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete document');
+      setError(e instanceof Error ? e.message : 'Failed to delete');
+    } finally {
+      setDeletePending(false);
     }
   };
 
@@ -651,7 +661,7 @@ export default function App() {
                       }}
                       onArchive={(e) => handleArchive(conv, e)}
                       onExport={() => downloadConversationExport(conv._id, conv.title)}
-                      onDelete={() => handleDeleteConversation(conv._id)}
+                      onDelete={() => setPendingDelete({ kind: 'conversation', id: conv._id })}
                     />
                   </div>
                 ))}
@@ -714,7 +724,11 @@ export default function App() {
                     >
                       {label('slides', 'Make slides', 'Making slides…')}
                     </button>
-                    <button type="button" className="danger" onClick={() => handleDeleteDocument(doc._id)}>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => setPendingDelete({ kind: 'document', id: doc._id })}
+                    >
                       Delete
                     </button>
                   </div>
@@ -796,6 +810,16 @@ export default function App() {
         </header>
 
         {error && <div className="error-banner" role="alert">{error}</div>}
+        {pendingDelete && (
+          <ConfirmDeleteDialog
+            title={pendingDelete.kind === 'conversation' ? 'Delete this conversation?' : 'Delete this document?'}
+            pending={deletePending}
+            onCancel={() => {
+              if (!deletePending) setPendingDelete(null);
+            }}
+            onConfirm={confirmDelete}
+          />
+        )}
         <>
           <div className="chat-thread" ref={threadRef}>
             {educationResult && (

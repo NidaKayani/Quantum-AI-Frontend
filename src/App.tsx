@@ -796,16 +796,16 @@ export default function App() {
         </header>
 
         {error && <div className="error-banner" role="alert">{error}</div>}
-        {educationResult && (
-          <EducationResultPanel
-            key={`${educationResult.kind}-${educationResult.documentName}-${educationResult.kind === 'quiz' ? educationResult.title : ''}`}
-            result={educationResult}
-            onClose={() => setEducationResult(null)}
-          />
-        )}
         <>
           <div className="chat-thread" ref={threadRef}>
-            {messages.length === 0 ? (
+            {educationResult && (
+              <EducationResultPanel
+                key={`${educationResult.kind}-${educationResult.documentName}-${educationResult.kind === 'quiz' ? educationResult.title : ''}`}
+                result={educationResult}
+                onClose={() => setEducationResult(null)}
+              />
+            )}
+            {messages.length === 0 && !educationResult ? (
               <div className="empty-state">
                 <div className="qa-hero">
                   <div className="qa-hero-content">

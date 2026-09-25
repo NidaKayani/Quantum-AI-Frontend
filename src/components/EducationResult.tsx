@@ -18,18 +18,28 @@ export type SlidePlan = {
   notes?: string;
 };
 
+export type QuizDifficulty = 'easy' | 'medium' | 'hard';
+
 export type EducationResult =
   | { kind: 'summary'; documentName: string; summary: string }
-  | { kind: 'quiz'; documentName: string; title: string; questions: QuizQuestion[] }
+  | {
+      kind: 'quiz';
+      documentId: string;
+      documentName: string;
+      title: string;
+      difficulty: QuizDifficulty;
+      questions: QuizQuestion[];
+    }
   | { kind: 'slides'; documentName: string; title: string; subtitle?: string; slides: SlidePlan[] };
 
 interface Props {
   result: EducationResult;
   onClose: () => void;
+  onMakeHarder?: () => void;
+  harderPending?: boolean;
 }
 
-export function EducationResultPanel({ result, onClose }: Props) {
-  const [showAnswers, setShowAnswers] = useState(false);
+export function EducationResultPanel({ result, onClose, onMakeHarder, harderPending }: Props) {
   const heading =
     result.kind === 'summary'
       ? `Summary · ${result.documentName}`
@@ -42,11 +52,6 @@ export function EducationResultPanel({ result, onClose }: Props) {
       <header>
         <h3>{heading}</h3>
         <div className="education-result-actions">
-          {result.kind === 'quiz' && (
-            <button type="button" onClick={() => setShowAnswers((open) => !open)}>
-              {showAnswers ? 'Hide answers' : 'Show answers'}
-            </button>
-          )}
           {result.kind === 'slides' && (
             <button type="button" onClick={() => downloadSlideOutline(result)}>
               Download outline
@@ -61,22 +66,12 @@ export function EducationResultPanel({ result, onClose }: Props) {
       {result.kind === 'summary' && <MarkdownBody text={result.summary} />}
 
       {result.kind === 'quiz' && (
-        <ol>
-          {result.questions.map((item, index) => (
-            <li key={`${index}-${item.question}`}>
-              <MarkdownBody text={item.question} />
-              <ul>
-                {item.options.map((option, optionIndex) => (
-                  <li key={option}>
-                    {String.fromCharCode(65 + optionIndex)}. <MarkdownBody inline text={option} />
-                    {showAnswers && optionIndex === item.answerIndex ? ' ✓' : ''}
-                  </li>
-                ))}
-              </ul>
-              {showAnswers && item.explanation ? <MarkdownBody text={item.explanation} /> : null}
-            </li>
-          ))}
-        </ol>
+        <QuizPlayer
+          questions={result.questions}
+          difficulty={result.difficulty}
+          harderPending={harderPending}
+          onMakeHarder={onMakeHarder}
+        />
       )}
 
       {result.kind === 'slides' && (
@@ -108,9 +103,101 @@ export function EducationResultPanel({ result, onClose }: Props) {
   );
 }
 
-function MarkdownBody({ text, inline = false }: { text: string; inline?: boolean }) {
+function QuizPlayer({
+  questions,
+  difficulty,
+  harderPending,
+  onMakeHarder,
+}: {
+  questions: QuizQuestion[];
+  difficulty: QuizDifficulty;
+  harderPending?: boolean;
+  onMakeHarder?: () => void;
+}) {
+  const [picks, setPicks] = useState<Array<number | null>>(() => questions.map(() => null));
+  const [graded, setGraded] = useState(false);
+
+  const answered = picks.filter((pick) => pick != null).length;
+  const correctCount = graded
+    ? questions.filter((item, index) => picks[index] === item.answerIndex).length
+    : 0;
+
+  const choose = (questionIndex: number, optionIndex: number) => {
+    if (graded) return;
+    setPicks((current) => current.map((pick, index) => (index === questionIndex ? optionIndex : pick)));
+  };
+
   return (
-    <div className={inline ? 'markdown-body markdown-inline' : 'markdown-body'}>
+    <div className="quiz-player">
+      <p className="quiz-progress">
+        {graded
+          ? `Score: ${correctCount}/${questions.length}`
+          : `${answered} of ${questions.length} answered · ${difficulty}`}
+      </p>
+      {questions.map((item, questionIndex) => {
+        const picked = picks[questionIndex];
+        const missed = graded && picked !== item.answerIndex;
+        return (
+          <article className="quiz-card" key={`${questionIndex}-${item.question}`}>
+            <p className="quiz-question">
+              {questionIndex + 1}. <MarkdownBody inline text={item.question} />
+            </p>
+            <div className="quiz-options" role="radiogroup" aria-label={item.question}>
+              {item.options.map((option, optionIndex) => {
+                const selected = picked === optionIndex;
+                const isAnswer = optionIndex === item.answerIndex;
+                const state = !graded
+                  ? selected
+                    ? 'selected'
+                    : ''
+                  : isAnswer
+                    ? 'correct'
+                    : selected
+                      ? 'wrong'
+                      : '';
+                return (
+                  <button
+                    key={`${optionIndex}-${option}`}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={graded}
+                    className={`quiz-option ${state}`}
+                    onClick={() => choose(questionIndex, optionIndex)}
+                  >
+                    <span className="quiz-radio" aria-hidden="true" />
+                    <MarkdownBody inline text={option} />
+                  </button>
+                );
+              })}
+            </div>
+            {missed && item.explanation ? (
+              <div className="quiz-explain">
+                <MarkdownBody text={item.explanation} />
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
+      <div className="quiz-actions">
+        {!graded ? (
+          <button type="button" disabled={answered < questions.length} onClick={() => setGraded(true)}>
+            Check answers
+          </button>
+        ) : (
+          <button type="button" disabled={!onMakeHarder || harderPending} onClick={onMakeHarder}>
+            {harderPending ? 'Making a harder quiz…' : 'Make Harder'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MarkdownBody({ text, inline = false }: { text: string; inline?: boolean }) {
+  const Tag = inline ? 'span' : 'div';
+  return (
+    <Tag className={inline ? 'markdown-body markdown-inline' : 'markdown-body'}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeSanitize]}
@@ -119,7 +206,7 @@ function MarkdownBody({ text, inline = false }: { text: string; inline?: boolean
       >
         {text}
       </ReactMarkdown>
-    </div>
+    </Tag>
   );
 }
 

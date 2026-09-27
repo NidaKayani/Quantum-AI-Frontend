@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
+import { downloadPresentationFromPlan } from '../api/client';
 import { safeMarkdownUrl } from '../utils/safeUrl';
 
 export type QuizQuestion = {
@@ -31,7 +32,15 @@ export type EducationResult =
       questions: QuizQuestion[];
       savedId?: string;
     }
-  | { kind: 'slides'; documentName: string; title: string; subtitle?: string; slides: SlidePlan[]; savedId?: string };
+  | {
+      kind: 'slides';
+      documentId?: string;
+      documentName: string;
+      title: string;
+      subtitle?: string;
+      slides: SlidePlan[];
+      savedId?: string;
+    };
 
 interface Props {
   result: EducationResult;
@@ -55,11 +64,7 @@ export function EducationResultPanel({ result, onClose, onMakeHarder, harderPend
         <h3>{heading}</h3>
         <div className="education-result-actions">
           {result.savedId ? <span className="education-saved-mark">Saved</span> : null}
-          {result.kind === 'slides' && (
-            <button type="button" onClick={() => downloadSlideOutline(result)}>
-              Download outline
-            </button>
-          )}
+          {result.kind === 'slides' && <DownloadPptxButton result={result} />}
           <button type="button" onClick={onClose} aria-label="Close result">
             ×
           </button>
@@ -307,6 +312,54 @@ function QuizPlayer({
   );
 }
 
+function DownloadPptxButton({ result }: { result: Extract<EducationResult, { kind: 'slides' }> }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDownload = async () => {
+    if (pending || result.slides.length === 0) return;
+    setPending(true);
+    setError(null);
+    try {
+      const baseName = (result.documentName || result.title || 'presentation')
+        .replace(/\.[^.]+$/, '')
+        .replace(/[^\w.\-]+/g, '-');
+      const { blob, filename } = await downloadPresentationFromPlan({
+        presentationTitle: result.title || 'Presentation',
+        subtitle: result.subtitle,
+        slides: result.slides,
+        filename: `${baseName || 'presentation'}-presentation.pptx`,
+        sourceDocumentId: result.documentId,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename.endsWith('.pptx') ? filename : `${filename}.pptx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not download PowerPoint');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <>
+      <button type="button" onClick={handleDownload} disabled={pending}>
+        {pending ? 'Preparing PPT…' : 'Download PowerPoint'}
+      </button>
+      {error ? (
+        <span className="education-download-error" role="alert">
+          {error}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 function MarkdownBody({ text, inline = false }: { text: string; inline?: boolean }) {
   const Tag = inline ? 'span' : 'div';
   return (
@@ -321,23 +374,4 @@ function MarkdownBody({ text, inline = false }: { text: string; inline?: boolean
       </ReactMarkdown>
     </Tag>
   );
-}
-
-function downloadSlideOutline(result: Extract<EducationResult, { kind: 'slides' }>) {
-  const lines = [`${result.title}`, result.subtitle ?? '', `Source: ${result.documentName}`, ''];
-  result.slides.forEach((slide, index) => {
-    lines.push(`Slide ${index + 1}: ${slide.title}`);
-    slide.bullets?.forEach((bullet) => lines.push(`- ${bullet}`));
-    if (slide.notes) lines.push(`Notes: ${slide.notes}`);
-    lines.push('');
-  });
-  const blob = new Blob([lines.filter((line, index) => line !== '' || index > 0).join('\n')], {
-    type: 'text/plain;charset=utf-8',
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${result.documentName.replace(/[^a-z0-9]+/gi, '-')}-slides.txt`;
-  link.click();
-  URL.revokeObjectURL(url);
 }

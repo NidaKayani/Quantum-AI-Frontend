@@ -300,6 +300,34 @@ export async function downloadPresentation(
   return { blob, filename };
 }
 
+/** Build a PowerPoint from an existing slide plan (no extra AI call). */
+export async function downloadPresentationFromPlan(body: {
+  presentationTitle: string;
+  subtitle?: string;
+  slides: Array<{ type: string; title: string; bullets?: string[]; notes?: string }>;
+  filename?: string;
+  sourceDocumentId?: string;
+}) {
+  const res = await fetch(`${API_BASE}/presentations/build`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      notifyAuthExpired();
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? 'PowerPoint download failed');
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition');
+  const match = disposition?.match(/filename="(.+)"/);
+  const filename = match?.[1] ?? 'presentation.pptx';
+  return { blob, filename };
+}
+
 export async function downloadConversationExport(id: string, title: string) {
   const res = await fetch(`${API_BASE}/conversations/${id}/export`, {
     headers: authHeaders(),

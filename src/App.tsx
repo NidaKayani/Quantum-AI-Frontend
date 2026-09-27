@@ -519,6 +519,7 @@ export default function App() {
       }
       result = {
         kind: 'slides',
+        documentId: item.documentId,
         documentName: item.documentName,
         title: typeof payload.title === 'string' ? payload.title : item.title,
         subtitle: typeof payload.subtitle === 'string' ? payload.subtitle : undefined,
@@ -563,6 +564,7 @@ export default function App() {
         const plan = await generatePresentationPlan(doc._id);
         setEducationResult(await storeStudy(doc._id, {
           kind: 'slides',
+          documentId: doc._id,
           documentName: doc.originalName,
           title: plan.presentationTitle,
           subtitle: plan.subtitle,

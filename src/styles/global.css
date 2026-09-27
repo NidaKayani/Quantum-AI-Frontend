@@ -1261,6 +1261,13 @@ button {
   color: var(--text-secondary);
 }
 
+.education-download-error {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #b91c1c;
+  max-width: 12rem;
+}
+
 .education-result header button {
   border: 0;
   background: transparent;

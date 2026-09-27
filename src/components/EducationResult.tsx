@@ -21,7 +21,7 @@ export type SlidePlan = {
 export type QuizDifficulty = 'easy' | 'medium' | 'hard';
 
 export type EducationResult =
-  | { kind: 'summary'; documentName: string; summary: string }
+  | { kind: 'summary'; documentName: string; summary: string; savedId?: string }
   | {
       kind: 'quiz';
       documentId: string;
@@ -29,17 +29,19 @@ export type EducationResult =
       title: string;
       difficulty: QuizDifficulty;
       questions: QuizQuestion[];
+      savedId?: string;
     }
-  | { kind: 'slides'; documentName: string; title: string; subtitle?: string; slides: SlidePlan[] };
+  | { kind: 'slides'; documentName: string; title: string; subtitle?: string; slides: SlidePlan[]; savedId?: string };
 
 interface Props {
   result: EducationResult;
   onClose: () => void;
   onMakeHarder?: () => void;
   harderPending?: boolean;
+  onQuizSaved?: (questions: QuizQuestion[]) => void;
 }
 
-export function EducationResultPanel({ result, onClose, onMakeHarder, harderPending }: Props) {
+export function EducationResultPanel({ result, onClose, onMakeHarder, harderPending, onQuizSaved }: Props) {
   const heading =
     result.kind === 'summary'
       ? `Summary · ${result.documentName}`
@@ -52,6 +54,7 @@ export function EducationResultPanel({ result, onClose, onMakeHarder, harderPend
       <header>
         <h3>{heading}</h3>
         <div className="education-result-actions">
+          {result.savedId ? <span className="education-saved-mark">Saved</span> : null}
           {result.kind === 'slides' && (
             <button type="button" onClick={() => downloadSlideOutline(result)}>
               Download outline
@@ -71,6 +74,7 @@ export function EducationResultPanel({ result, onClose, onMakeHarder, harderPend
           difficulty={result.difficulty}
           harderPending={harderPending}
           onMakeHarder={onMakeHarder}
+          onQuizSaved={onQuizSaved}
         />
       )}
 
@@ -108,11 +112,13 @@ function QuizPlayer({
   difficulty,
   harderPending,
   onMakeHarder,
+  onQuizSaved,
 }: {
   questions: QuizQuestion[];
   difficulty: QuizDifficulty;
   harderPending?: boolean;
   onMakeHarder?: () => void;
+  onQuizSaved?: (questions: QuizQuestion[]) => void;
 }) {
   const [items, setItems] = useState(questions);
   const [draft, setDraft] = useState(questions);
@@ -157,6 +163,7 @@ function QuizPlayer({
     setEditing(false);
     setGraded(false);
     setPicks(next.map(() => null));
+    onQuizSaved?.(next);
   };
 
   const copyQuiz = async () => {

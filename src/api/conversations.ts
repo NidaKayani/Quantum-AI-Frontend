@@ -162,3 +162,44 @@ export async function generatePresentationPlan(
   if (!res.data?.plan) throw new Error('Presentation plan was empty');
   return res.data.plan;
 }
+
+export type SavedStudyKind = 'summary' | 'quiz' | 'slides';
+
+export interface SavedStudyItem {
+  _id: string;
+  kind: SavedStudyKind;
+  title: string;
+  documentId?: string;
+  documentName: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchSavedStudies() {
+  const res = await apiGet<ApiResponse<{ items: SavedStudyItem[] }>>('/saved');
+  return res.data?.items ?? [];
+}
+
+export async function createSavedStudy(body: {
+  kind: SavedStudyKind;
+  title: string;
+  documentId?: string;
+  documentName: string;
+  payload: Record<string, unknown>;
+}) {
+  const res = await apiPost<ApiResponse<SavedStudyItem>>('/saved', body);
+  return res.data!;
+}
+
+export async function updateSavedStudy(
+  id: string,
+  body: { title?: string; payload?: Record<string, unknown> }
+) {
+  const res = await apiPatch<ApiResponse<SavedStudyItem>>(`/saved/${id}`, body);
+  return res.data!;
+}
+
+export async function deleteSavedStudy(id: string) {
+  await apiDelete(`/saved/${id}`);
+}

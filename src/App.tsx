@@ -4,7 +4,13 @@ import { ChatInput } from './components/ChatInput';
 import { SearchResultsCard } from './components/SearchResultsCard';
 import { RagSourcesCard } from './components/RagSourcesCard';
 import { ConfirmDeleteDialog } from './components/ConfirmDeleteDialog';
-import { EducationResultPanel, type EducationResult, type QuizDifficulty } from './components/EducationResult';
+import {
+  EducationResultPanel,
+  type EducationResult,
+  type QuizDifficulty,
+  type QuizQuestion,
+  type SlidePlan,
+} from './components/EducationResult';
 import { ThemeMenu } from './components/ThemeMenu';
 import { ConversationActionsMenu } from './components/ConversationActionsMenu';
 import {
@@ -14,11 +20,16 @@ import {
   fetchConversation,
   fetchConversationsPage,
   fetchDocuments,
+  createSavedStudy,
+  deleteSavedStudy,
+  fetchSavedStudies,
   generatePresentationPlan,
   generateQuiz,
   summarizeDocument,
   truncateFromMessage,
   updateConversation,
+  updateSavedStudy,
+  type SavedStudyItem,
 } from './api/conversations';
 import {
   streamChat,
@@ -41,6 +52,52 @@ function readSavedModelPace(): ModelPace {
   }
 }
 
+function clipText(value: string, max: number) {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Untitled';
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+}
+
+function readQuizQuestions(value: unknown): QuizQuestion[] {
+  if (!Array.isArray(value)) return [];
+  const questions: QuizQuestion[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const options = Array.isArray(row.options)
+      ? row.options.filter((option): option is string => typeof option === 'string')
+      : [];
+    if (typeof row.question !== 'string' || options.length < 2) continue;
+    const answerIndex = typeof row.answerIndex === 'number' ? row.answerIndex : 0;
+    questions.push({
+      question: row.question,
+      options,
+      answerIndex: Math.min(Math.max(Math.trunc(answerIndex), 0), options.length - 1),
+      explanation: typeof row.explanation === 'string' ? row.explanation : '',
+    });
+  }
+  return questions;
+}
+
+function readSlides(value: unknown): SlidePlan[] {
+  if (!Array.isArray(value)) return [];
+  const slides: SlidePlan[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.title !== 'string') continue;
+    slides.push({
+      type: typeof row.type === 'string' ? row.type : 'content',
+      title: row.title,
+      bullets: Array.isArray(row.bullets)
+        ? row.bullets.filter((bullet): bullet is string => typeof bullet === 'string')
+        : undefined,
+      notes: typeof row.notes === 'string' ? row.notes : undefined,
+    });
+  }
+  return slides;
+}
+
 const SUGGESTIONS = [
   'Explain quantum computing in simple terms',
   'Write a README.md for my project',
@@ -48,7 +105,7 @@ const SUGGESTIONS = [
   'Make a quiz from my notes',
 ];
 
-type SidebarTab = 'chats' | 'documents';
+type SidebarTab = 'chats' | 'documents' | 'saved';
 type ChatFilter = 'all' | 'archived';
 
 export default function App() {
@@ -62,6 +119,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [savedItems, setSavedItems] = useState<SavedStudyItem[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -79,7 +137,7 @@ export default function App() {
   const [educationBusy, setEducationBusy] = useState<{ id: string; action: 'summarize' | 'quiz' | 'slides' } | null>(null);
   const [educationResult, setEducationResult] = useState<EducationResult | null>(null);
   const [pendingDelete, setPendingDelete] = useState<
-    { kind: 'conversation' | 'document'; id: string } | null
+    { kind: 'conversation' | 'document' | 'saved'; id: string } | null
   >(null);
   const [deletePending, setDeletePending] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -138,6 +196,14 @@ export default function App() {
     }
   }, []);
 
+  const loadSaved = useCallback(async () => {
+    try {
+      setSavedItems(await fetchSavedStudies());
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
@@ -146,7 +212,8 @@ export default function App() {
   useEffect(() => {
     loadConversations(debouncedSearch, chatFilter);
     loadDocuments();
-  }, [loadConversations, loadDocuments, debouncedSearch, chatFilter]);
+    loadSaved();
+  }, [loadConversations, loadDocuments, loadSaved, debouncedSearch, chatFilter]);
 
   useEffect(() => {
     listModels()
@@ -178,6 +245,7 @@ export default function App() {
     setError(null);
     try {
       const { messages: history, conversation } = await fetchConversation(id);
+      setEducationResult(null);
       setMessages(history);
       const ids = new Set((conversation?.documentIds ?? []).map(String));
       if (!ids.size) {
@@ -203,6 +271,7 @@ export default function App() {
     setMessages([]);
     setInput('');
     setAttachedDocs([]);
+    setEducationResult(null);
     setError(null);
     setSidebarOpen(false);
   };
@@ -213,6 +282,7 @@ export default function App() {
   };
 
   const runStream = async (message: string, conversationId?: string | null) => {
+    setEducationResult(null);
     setError(null);
     setLoading(true);
 
@@ -362,6 +432,10 @@ export default function App() {
         await deleteConversation(pendingDelete.id);
         if (activeConversationId === pendingDelete.id) startNewChat();
         await loadConversations(search, chatFilter);
+      } else if (pendingDelete.kind === 'saved') {
+        await deleteSavedStudy(pendingDelete.id);
+        setSavedItems((prev) => prev.filter((item) => item._id !== pendingDelete.id));
+        setEducationResult((current) => (current?.savedId === pendingDelete.id ? null : current));
       } else {
         const removed = documents.find((doc) => doc._id === pendingDelete.id);
         await deleteDocument(pendingDelete.id);
@@ -379,6 +453,90 @@ export default function App() {
     }
   };
 
+  const storeStudy = async (documentId: string | undefined, result: EducationResult) => {
+    const rawTitle =
+      result.kind === 'summary'
+        ? `Summary · ${result.documentName}`
+        : result.kind === 'quiz'
+          ? result.title || `Quiz · ${result.documentName}`
+          : result.title || `Slides · ${result.documentName}`;
+    const payload =
+      result.kind === 'summary'
+        ? { summary: result.summary }
+        : result.kind === 'quiz'
+          ? { title: result.title, difficulty: result.difficulty, questions: result.questions }
+          : { title: result.title, subtitle: result.subtitle, slides: result.slides };
+    try {
+      const saved = await createSavedStudy({
+        kind: result.kind,
+        title: clipText(rawTitle, 200),
+        documentId: documentId || undefined,
+        documentName: clipText(result.documentName, 300),
+        payload,
+      });
+      await loadSaved();
+      return { ...result, savedId: saved?._id };
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'This result is open, but it could not be saved.');
+      return result;
+    }
+  };
+
+  const openSavedStudy = (item: SavedStudyItem) => {
+    const payload = item.payload ?? {};
+    let result: EducationResult | null = null;
+    if (item.kind === 'summary' && typeof payload.summary === 'string' && payload.summary.trim()) {
+      result = {
+        kind: 'summary',
+        documentName: item.documentName,
+        summary: payload.summary,
+        savedId: item._id,
+      };
+    } else if (item.kind === 'quiz') {
+      const questions = readQuizQuestions(payload.questions);
+      if (questions.length === 0) {
+        setError('That saved quiz could not be opened.');
+        return;
+      }
+      const difficulty: QuizDifficulty =
+        payload.difficulty === 'easy' || payload.difficulty === 'medium' || payload.difficulty === 'hard'
+          ? payload.difficulty
+          : 'medium';
+      result = {
+        kind: 'quiz',
+        documentId: item.documentId ?? '',
+        documentName: item.documentName,
+        title: typeof payload.title === 'string' ? payload.title : item.title,
+        difficulty,
+        questions,
+        savedId: item._id,
+      };
+    } else if (item.kind === 'slides') {
+      const slides = readSlides(payload.slides);
+      if (slides.length === 0) {
+        setError('That saved slide outline could not be opened.');
+        return;
+      }
+      result = {
+        kind: 'slides',
+        documentName: item.documentName,
+        title: typeof payload.title === 'string' ? payload.title : item.title,
+        subtitle: typeof payload.subtitle === 'string' ? payload.subtitle : undefined,
+        slides,
+        savedId: item._id,
+      };
+    }
+    if (!result) {
+      setError('That saved result could not be opened.');
+      return;
+    }
+    setEducationResult(result);
+    setMessages([]);
+    setActiveConversationId(null);
+    setError(null);
+    setSidebarOpen(false);
+  };
+
   const runEducationAction = async (doc: DocumentItem, action: 'summarize' | 'quiz' | 'slides') => {
     if (educationBusy) return;
     setEducationBusy({ id: doc._id, action });
@@ -386,27 +544,33 @@ export default function App() {
     try {
       if (action === 'summarize') {
         const data = await summarizeDocument(doc._id);
-        setEducationResult({ kind: 'summary', documentName: doc.originalName, summary: data.summary });
+        setEducationResult(await storeStudy(doc._id, {
+          kind: 'summary',
+          documentName: doc.originalName,
+          summary: data.summary,
+        }));
       } else if (action === 'quiz') {
         const data = await generateQuiz(doc._id, { count: 10, difficulty: 'medium' });
-        setEducationResult({
+        setEducationResult(await storeStudy(doc._id, {
           kind: 'quiz',
           documentId: doc._id,
           documentName: doc.originalName,
           title: data.title,
           difficulty: 'medium',
           questions: data.questions,
-        });
+        }));
       } else {
         const plan = await generatePresentationPlan(doc._id);
-        setEducationResult({
+        setEducationResult(await storeStudy(doc._id, {
           kind: 'slides',
           documentName: doc.originalName,
           title: plan.presentationTitle,
           subtitle: plan.subtitle,
           slides: plan.slides,
-        });
+        }));
       }
+      setMessages([]);
+      setActiveConversationId(null);
       setSidebarOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not run that document action');
@@ -417,19 +581,23 @@ export default function App() {
 
   const makeQuizHarder = async () => {
     if (!educationResult || educationResult.kind !== 'quiz' || educationBusy) return;
+    if (!educationResult.documentId) {
+      setError('The original document is no longer linked, so a harder quiz cannot be made.');
+      return;
+    }
     const next: QuizDifficulty = educationResult.difficulty === 'easy' ? 'medium' : 'hard';
     setEducationBusy({ id: educationResult.documentId, action: 'quiz' });
     setError(null);
     try {
       const data = await generateQuiz(educationResult.documentId, { count: 10, difficulty: next });
-      setEducationResult({
+      setEducationResult(await storeStudy(educationResult.documentId, {
         kind: 'quiz',
         documentId: educationResult.documentId,
         documentName: educationResult.documentName,
         title: data.title,
         difficulty: next,
         questions: data.questions,
-      });
+      }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not make a harder quiz');
     } finally {
@@ -599,6 +767,13 @@ export default function App() {
           >
             Documents
           </button>
+          <button
+            type="button"
+            className={`tab ${tab === 'saved' ? 'active' : ''}`}
+            onClick={() => setTab('saved')}
+          >
+            Saved
+          </button>
         </div>
 
         {tab === 'chats' && (
@@ -695,6 +870,48 @@ export default function App() {
                   </button>
                 )}
               </>
+            )
+          ) : tab === 'saved' ? (
+            savedItems.length === 0 ? (
+              <p style={{ color: '#64748b', fontSize: '0.8rem', padding: '0.5rem' }}>
+                Summaries, quizzes, and slides you create are kept here.
+              </p>
+            ) : (
+              savedItems.map((item) => (
+                <div
+                  key={item._id}
+                  className={`list-item list-item--doc ${educationResult?.savedId === item._id ? 'active' : ''}`}
+                >
+                  <div
+                    className="list-item-body"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openSavedStudy(item)}
+                    onKeyDown={(event) => event.key === 'Enter' && openSavedStudy(item)}
+                  >
+                    <span className="list-item-title">{item.title}</span>
+                    <span className="list-item-meta">
+                      {item.kind === 'quiz' ? 'Quiz' : item.kind === 'slides' ? 'Slides' : 'Summary'}
+                      {' · '}
+                      {item.documentName}
+                      {' · '}
+                      {new Date(item.updatedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="doc-actions">
+                    <button type="button" onClick={() => openSavedStudy(item)}>
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => setPendingDelete({ kind: 'saved', id: item._id })}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))
             )
           ) : documents.length === 0 ? (
             <p style={{ color: '#64748b', fontSize: '0.8rem', padding: '0.5rem' }}>
@@ -836,7 +1053,13 @@ export default function App() {
         {error && <div className="error-banner" role="alert">{error}</div>}
         {pendingDelete && (
           <ConfirmDeleteDialog
-            title={pendingDelete.kind === 'conversation' ? 'Delete this conversation?' : 'Delete this document?'}
+            title={
+              pendingDelete.kind === 'conversation'
+                ? 'Delete this conversation?'
+                : pendingDelete.kind === 'saved'
+                  ? 'Delete this saved result?'
+                  : 'Delete this document?'
+            }
             pending={deletePending}
             onCancel={() => {
               if (!deletePending) setPendingDelete(null);
@@ -848,10 +1071,28 @@ export default function App() {
           <div className="chat-thread" ref={threadRef}>
             {educationResult && (
               <EducationResultPanel
-                key={`${educationResult.kind}-${educationResult.documentName}-${educationResult.kind === 'quiz' ? `${educationResult.difficulty}-${educationResult.title}` : ''}`}
+                key={`${educationResult.savedId ?? 'draft'}-${educationResult.kind}-${educationResult.kind === 'quiz' ? educationResult.difficulty : ''}`}
                 result={educationResult}
                 harderPending={educationBusy?.action === 'quiz'}
-                onMakeHarder={educationResult.kind === 'quiz' ? makeQuizHarder : undefined}
+                onMakeHarder={
+                  educationResult.kind === 'quiz' && educationResult.documentId ? makeQuizHarder : undefined
+                }
+                onQuizSaved={async (questions: QuizQuestion[]) => {
+                  if (!educationResult || educationResult.kind !== 'quiz' || !educationResult.savedId) return;
+                  try {
+                    await updateSavedStudy(educationResult.savedId, {
+                      payload: {
+                        title: educationResult.title,
+                        difficulty: educationResult.difficulty,
+                        questions,
+                      },
+                    });
+                    setEducationResult({ ...educationResult, questions });
+                    await loadSaved();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Could not save quiz edits');
+                  }
+                }}
                 onClose={() => setEducationResult(null)}
               />
             )}

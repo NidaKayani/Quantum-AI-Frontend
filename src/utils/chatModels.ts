@@ -9,6 +9,7 @@ const RETIRED_CHAT_MODELS = new Set([
   'llama-3.3-70b-versatile',
   'llama-3.3-70b-specdec',
   'meta-llama/llama-4-scout-17b-16e-instruct',
+  'meta-llama/llama-4-maverick-17b-128e-instruct',
 ]);
 
 const NON_CHAT_PATTERNS = [
@@ -76,13 +77,16 @@ export function pickDefaultChatModel(available: string[], fallback = 'openai/gpt
   for (const preferred of PREFERRED_CHAT_MODELS) {
     if (available.includes(preferred)) return preferred;
   }
-  return available[0] || fallback;
+  const usable = available.find((id) => !RETIRED_CHAT_MODELS.has(id));
+  return usable || fallback;
 }
 
 /** Map the Fast / Smart picker onto a real chat model the account can run. */
 export function resolvePaceModel(pace: ModelPace, available: string[]): string {
   const preferred = pace === 'fast' ? FAST_CHAT_MODELS : SMART_CHAT_MODELS;
-  const choices = available.length ? available : [...preferred];
+  const choices = (available.length ? available : [...preferred]).filter(
+    (id) => !RETIRED_CHAT_MODELS.has(id)
+  );
   for (const id of preferred) {
     if (choices.includes(id)) return id;
   }
